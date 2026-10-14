@@ -1,0 +1,1 @@
+﻿C++03 host tests passed: all Tx/Rx fields, signed positions/torque, output guard bytes and layout rejection. ASan/UBSan ran with leak detection disabled due to environment ptrace restrictions. vcproj XML and CP950/CRLF checked. Original Type4/9 parsing verified unchanged. VS2008/EV355 full build and hardware tests NOT performed.

@@ -1,0 +1,19 @@
+﻿66: #include "WolongPdo.h"
+569: if (wSlaveType[i] == TYPE_WOLONG)
+571: WOLONG_TX_DATA tx;
+572: WolongDecodeTx(&YasInBuff[i][0], &tx);
+967: if (wSlaveType[i] == TYPE_WOLONG)
+969: WolongEncodeRx(&YasOutBuff[i][0], wCtrlCmd[i], bModeWrite[i],
+3245: #if WOLONG_IDENTIFICATION_ENABLED
+3246: if (pMySlave->dwVendorId == WOLONG_VENDOR_ID &&
+3247: pMySlave->dwProductCode == WOLONG_PRODUCT_CODE)
+3248: wSlaveType[dwIdx] = TYPE_WOLONG;
+3347: /* Validate all selected Wolong layouts BEFORE any image copy. */
+3350: if (wSlaveType[i] == TYPE_WOLONG)
+3353: if (!WolongLayoutMatches(pMySlave->dwPdOffsIn,
+3360: RtPrintf("Wolong PDO layout mismatch: axis=%d, in=%lu bits, out=%lu bits\n",
+3377: if (wSlaveType[i] == TYPE_WOLONG)
+3378: memcpy(&YasInBuff[i][0], &pbyEcatPDIn[wByOffset], WOLONG_TX_BYTES);
+3428: if  ( wSlaveType[i] == 4 || wSlaveType[i] == 18 || wSlaveType[i] == TYPE_WOLONG )
+3474: if (wSlaveType[i] == TYPE_WOLONG)
+3475: memcpy(&pbyEcatPDOut[wByOffset], &YasOutBuff[i][0], WOLONG_RX_BYTES);

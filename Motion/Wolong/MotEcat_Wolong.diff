@@ -1,0 +1,121 @@
+--- original/MotEcat.cpp
++++ modified/MotEcat.cpp
+@@ -63,6 +63,7 @@
+ #include <math.h>
+ #include <malloc.h>
+ #include <memory.h>
++#include "WolongPdo.h"
+ 
+   //  14.07.22, 10.10.07;
+ //  #define _NO_ECAT_R0_THREAD_         0
+@@ -565,7 +566,23 @@
+       iDebugInf[i]   = 0;
+       dwDOutVelRd[i] = 0;   //  13.05.27;
+       /***/
+-      if  ( wSlaveType[i] == 2 )
++      if (wSlaveType[i] == TYPE_WOLONG)
++          {
++          WOLONG_TX_DATA tx;
++          WolongDecodeTx(&YasInBuff[i][0], &tx);
++          wErrCode[i] = tx.errorCode;
++          wSlavSts[i] = tx.statusword;
++          bModeRead[i] = tx.mode;
++          iEncPos[i] = tx.position;
++          wTouchSts[i] = tx.probeStatus;
++          iTouchPos[i] = tx.probePosition;
++          iFolwErrVal[i] = tx.followingError;
++          dwDInput[i] = tx.digitalInputs;
++          shTorqVal[i] = tx.torque;
++          iHwCmdPos[i] = iLastCmdPos[i]; /* software value, not PDO feedback */
++          iCmdPosRet[i] = 0; /* not present in this Tx mapping */
++          }
++      else if  ( wSlaveType[i] == 2 )
+           {  // == SDP-E, 士林電機; 
+           iEncPos[i]     = *(int *)&YasInBuff[i][2];
+           shTorqVal[i]   = *(short *)&YasInBuff[i][6];
+@@ -947,7 +964,13 @@
+       /***/
+       //  07.12.26;
+       //  if  ( dwOpRtssCount > 10000 )
+-      if  ( wSlaveType[i] == 3 )
++      if (wSlaveType[i] == TYPE_WOLONG)
++          {
++          WolongEncodeRx(&YasOutBuff[i][0], wCtrlCmd[i], bModeWrite[i],
++                         wTorqMax[i], iCmdPos[i], wTouchFunc[i], iVelCmd[i]);
++          /* No target torque, VFF or digital output entry in the 15-byte Rx. */
++          }
++      else if  ( wSlaveType[i] == 3 )
+           {  //  CNC-IO;
+           piVal = (int *)&YasOutBuff[i][3];
+           *piVal = iVelCmd[i];
+@@ -3219,6 +3242,11 @@
+               wSlaveType[dwIdx] = 15;       //  Lenze, 12.12.14, 13.10.18;
+           else
+               wSlaveType[dwIdx] = 1;
++#if WOLONG_IDENTIFICATION_ENABLED
++          if (pMySlave->dwVendorId == WOLONG_VENDOR_ID &&
++              pMySlave->dwProductCode == WOLONG_PRODUCT_CODE)
++              wSlaveType[dwIdx] = TYPE_WOLONG;
++#endif
+           RtPrintf("     :  ( %lu, %lu, %lu, %lu );  \n",
+                    dwIdx, (DWORD)wStation, (DWORD)wAutoInc, (DWORD)wSlaveType[dwIdx] );          
+           }
+@@ -3316,6 +3344,27 @@
+       {
+       if  ( (dwYasFoundSlaves != 0) && (pbyEcatPDIn != EC_NULL) && (pbyEcatPDOut != EC_NULL) )
+           {
++          /* Validate all selected Wolong layouts BEFORE any image copy. */
++          for (i = 0; i < (int)dwYasFoundSlaves; i++)
++              {
++              if (wSlaveType[i] == TYPE_WOLONG)
++                  {
++                  pMySlave = (EC_T_CFG_SLAVE_INFO *)my_aSlaveList[i];
++                  if (!WolongLayoutMatches(pMySlave->dwPdOffsIn,
++                                           pMySlave->dwPdSizeIn,
++                                           pMySlave->dwPdOffsOut,
++                                           pMySlave->dwPdSizeOut))
++                      {
++                      static int lastBadAxis = -1;
++                      if (lastBadAxis != i)
++                          RtPrintf("Wolong PDO layout mismatch: axis=%d, in=%lu bits, out=%lu bits\n",
++                                   i, pMySlave->dwPdSizeIn, pMySlave->dwPdSizeOut);
++                      lastBadAxis = i;
++                      /* Abort this cycle; not a safety-rated stop mechanism. */
++                      return(-2);
++                      }
++                  }
++              }
+           oprtss_ptime_start( 1 );
+           for ( i = 0; i < (int)dwYasFoundSlaves; i++ )
+               {
+@@ -3325,7 +3374,9 @@
+               wByOffset = pMySlave->dwPdOffsIn/8;                
+               //  08.03.20, 08.01.07, 08.01.02, 07.12.26;
+               //  memcpy( &YasInBuff[i][0], &pbyEcatPDIn[wByOffset], 20);
+-              if  ( wSlaveType[i] == 2 )
++              if (wSlaveType[i] == TYPE_WOLONG)
++                  memcpy(&YasInBuff[i][0], &pbyEcatPDIn[wByOffset], WOLONG_TX_BYTES);
++              else if  ( wSlaveType[i] == 2 )
+                   memcpy( &YasInBuff[i][0], &pbyEcatPDIn[wByOffset], 25);   //  12.11.28, 21 -> 25;
+               else if  ( wSlaveType[i] == 3 )
+                   {  //  08.05.24, CNC-IO, 讀取兩軸, 54 = 27*2;
+@@ -3374,7 +3425,7 @@
+                   memcpy( &YasInBuff[i][0], &pbyEcatPDIn[wByOffset], 26);
+               //  15.01.15, 14.12.23, 08.01.07;
+               //  if  ( wSlaveType[i] == 4 )
+-              if  ( wSlaveType[i] == 4 || wSlaveType[i] == 18 )
++              if  ( wSlaveType[i] == 4 || wSlaveType[i] == 18 || wSlaveType[i] == TYPE_WOLONG )
+                   wSlavSts[i] = *(EC_T_WORD *)&YasInBuff[i][2];
+               else if  ( wSlaveType[i] == 19 )
+                   wSlavSts[i] = *(EC_T_WORD *)&YasInBuff[i][22];
+@@ -3420,7 +3471,9 @@
+               pMySlave = (EC_T_CFG_SLAVE_INFO *)my_aSlaveList[i];    
+               wByOffset = pMySlave->dwPdOffsOut/8;                
+               //  13.05.27, 08.06.25, 08.05.24, 08.03.20;
+-              if  ( wSlaveType[i] == 3 )
++              if (wSlaveType[i] == TYPE_WOLONG)
++                  memcpy(&pbyEcatPDOut[wByOffset], &YasOutBuff[i][0], WOLONG_RX_BYTES);
++              else if  ( wSlaveType[i] == 3 )
+                   memcpy( &pbyEcatPDOut[wByOffset], &YasOutBuff[i][0], 13);  //  不覆寫 dwDOutVel[];
+                   //  memcpy( &pbyEcatPDOut[wByOffset], &YasOutBuff[i][0], 17);
+                   //  memcpy( &pbyEcatPDOut[wByOffset], &YasOutBuff[i][0], 34);
